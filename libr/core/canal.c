@@ -1751,7 +1751,6 @@ static int core_anal_graph_construct_nodes(RCore *core, RAnalFunction *fcn, int 
 	int left = 300;
 	int top = 0;
 
-	int is_json_format_disasm = opts & R_CORE_ANAL_JSON_FORMAT_DISASM;
 	char *pal_curr = palColorFor ("graph.current");
 	char *pal_traced = palColorFor ("graph.traced");
 	char *pal_box4 = palColorFor ("graph.box4");
@@ -1815,11 +1814,7 @@ static int core_anal_graph_construct_nodes(RCore *core, RAnalFunction *fcn, int 
 			ut8 *buf = malloc (bbi->size);
 			if (buf) {
 				r_io_read_at (core->io, bbi->addr, buf, bbi->size);
-				if (is_json_format_disasm) {
-					r_core_print_disasm (core, bbi->addr, buf, bbi->size, bbi->size, 0, NULL, true, true, pj, NULL);
-				} else {
-					r_core_print_disasm_json (core, bbi->addr, buf, bbi->size, 0, pj);
-				}
+				r_core_print_disasm_json (core, bbi->addr, buf, bbi->size, 0, 0, NULL, pj);
 				free (buf);
 			} else {
 				R_LOG_ERROR ("cannot allocate %"PFMT64u" byte(s)", bbi->size);

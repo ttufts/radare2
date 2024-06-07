@@ -380,6 +380,8 @@ static void ds_end_line_highlight(RDisasmState *ds);
 static bool line_highlighted(RDisasmState *ds);
 static int ds_print_shortcut(RDisasmState *ds, ut64 addr, int pos);
 
+bool check_pdu_condition (RDisasmState *ds, char *opstr_nocolor, enum r_pdu_condition_t pdu_condition_type, const void *pdu_condition);
+
 R_API ut64 r_core_pava(RCore *core, ut64 addr) {
 	if (core->print->pava) {
 		RIOMap *map = r_io_map_get_paddr (core->io, addr);
@@ -6034,7 +6036,7 @@ static void ds_end_line_highlight(RDisasmState *ds) {
  *
  * pdu_condition_type is only used if pdu_condition is not NULL
  */
-R_API int r_core_print_disasm(RCore *core, ut64 addr, ut8 *buf, int len, int count, enum r_pdu_condition_t pdu_condition_type, const void *pdu_condition, bool count_bytes, bool json, PJ *pj, RAnalFunction *pdf) {
+R_API int r_core_print_disasm(RCore *core, ut64 addr, ut8 *buf, int len, int count, enum r_pdu_condition_t pdu_condition_type, const void *pdu_condition, bool count_bytes, RAnalFunction *pdf) {
 	RPrint *p = core->print;
 	RAnalFunction *of = NULL;
 	RAnalFunction *f = NULL;
@@ -6045,11 +6047,6 @@ R_API int r_core_print_disasm(RCore *core, ut64 addr, ut8 *buf, int len, int cou
 
 	/* pdu vars */
 	bool pdu_condition_met = false;
-	char *opstr_nocolor = NULL;
-	int opcode_len = -1;
-	//const char *pdu_condition_esil = NULL;
-	const char *pdu_condition_instruction = NULL;
-	const char *pdu_condition_opcode = NULL;
 
 	// TODO: All those ds must be print flags
 	RDisasmState *ds = ds_init (core);
@@ -6062,32 +6059,12 @@ R_API int r_core_print_disasm(RCore *core, ut64 addr, ut8 *buf, int len, int cou
 	ds->hint = NULL;
 	ds->buf_line_begin = 0;
 	ds->pdf = pdf;
+	ds->pj = NULL;
 
 	int minopsz = 4;
 	if (pdu_condition) {
 		ds->count_bytes = false;
 		ds->count = INT_MAX;
-
-		/*if (pdu_condition_type == esil) {
-			pdu_condition_esil = (const char *)pdu_condition;
-		} else*/
-		if (pdu_condition_type == pdu_instruction) {
-			pdu_condition_instruction = (const char *)pdu_condition;
-		} else if (pdu_condition_type == pdu_opcode) {
-			pdu_condition_opcode = (const char *)pdu_condition;
-			opcode_len = strlen (pdu_condition_opcode);
-		}
-	}
-
-	if (json) {
-		ds->pj = pj? pj: r_core_pj_new (core);
-		if (!ds->pj) {
-			ds_free (ds);
-			return 0;
-		}
-		r_cons_push ();
-	} else {
-		ds->pj = NULL;
 	}
 
 	// disable row_offsets to prevent other commands to overwrite computed info
@@ -6116,9 +6093,6 @@ R_API int r_core_print_disasm(RCore *core, ut64 addr, ut8 *buf, int len, int cou
 				core->asmqjmps[i] = UT64_MAX;
 			}
 		}
-	}
-	if (ds->pj && !pj) {
-		pj_a (ds->pj);
 	}
 toro:
 	// uhm... is this necessary? imho can be removed
@@ -6202,9 +6176,6 @@ toro:
 
 		if (r_cons_is_breaked () || r_cons_was_breaked ()) {
 			R_FREE (nbuf);
-			if (ds->pj) {
-				r_cons_pop ();
-			}
 			r_cons_break_pop ();
 			ds_free (ds);
 			return 0; //break;
@@ -6588,32 +6559,15 @@ toro:
 			R_FREE (ds->refline2);
 			R_FREE (ds->prev_line_col);
 		}
+
 		if (pdu_condition) {
-			if (ds->opstr) {
-				opstr_nocolor = ds->opstr;
-				// we can't strcmp with color codes interfering
-				r_str_ansi_filter (opstr_nocolor, &ds->opstr, NULL, -1);
-				switch (pdu_condition_type) {
-#if 0
-				case esil:
-					pdu_condition_met = true;
-					break;
-#endif
-				case pdu_instruction:
-					// match full instruction
-					if (!strcmp (pdu_condition_instruction, opstr_nocolor)) {
-						pdu_condition_met = true;
-					}
-					break;
-				case pdu_opcode:
-					// opcode must be followed by space or end of string
-					if (!strncmp (pdu_condition_opcode, opstr_nocolor, opcode_len)
-							&& (opstr_nocolor[opcode_len] == ' '
-								|| !opstr_nocolor[opcode_len])) {
-						pdu_condition_met = true;
-					}
-				}
-			} else {
+			ds->count_bytes = false;
+			ds->count = INT_MAX;
+
+			if(ds->opstr){
+				pdu_condition_met = check_pdu_condition (ds, ds->opstr, pdu_condition_type, pdu_condition);
+			}
+			else {
 				// no more bytes - give up
 				r_cons_reset ();
 				r_cons_printf ("Failed to find instruction meeting pdu condition.\n");
@@ -6621,7 +6575,6 @@ toro:
 			}
 		}
 
-		R_FREE (opstr_nocolor);
 		R_FREE (ds->opstr);
 
 		inc = ds->oplen;
@@ -6664,14 +6617,6 @@ toro:
 		}
 	}
 #endif
-	if (ds->pj) {
-		r_cons_pop ();
-		if (!pj) {
-			pj_end (ds->pj);
-			r_cons_printf ("%s", pj_string (ds->pj));
-			pj_free (ds->pj);
-		}
-	}
 	r_print_set_rowoff (core->print, ds->lines, ds->at - addr, calc_row_offsets);
 	r_print_set_rowoff (core->print, ds->lines + 1, UT32_MAX, calc_row_offsets);
 	// TODO: this too (must review)
@@ -6703,6 +6648,48 @@ static inline bool check_end(int nb_opcodes, int nb_bytes, int i, int j) {
 		return j < nb_opcodes;
 	}
 	return i < nb_bytes;
+}
+
+bool check_pdu_condition (RDisasmState *ds, char *opstr_nocolor, enum r_pdu_condition_t pdu_condition_type, const void *pdu_condition) {
+	bool pdu_condition_met = false;
+
+	int opcode_len = -1;
+	// const char *pdu_condition_esil = NULL;
+	const char *pdu_condition_instruction = NULL;
+	const char *pdu_condition_opcode = NULL;
+
+	/*if (pdu_condition_type == esil) {
+		pdu_condition_esil = (const char *)pdu_condition;
+	} else*/
+	if (pdu_condition_type == pdu_instruction) {
+		pdu_condition_instruction = (const char *)pdu_condition;
+	} else if (pdu_condition_type == pdu_opcode) {
+		pdu_condition_opcode = (const char *)pdu_condition;
+		opcode_len = strlen (pdu_condition_opcode);
+	}
+
+	// we can't strcmp with color codes interfering
+	r_str_ansi_filter (opstr_nocolor, &ds->opstr, NULL, -1);
+	switch (pdu_condition_type) {
+#if 0
+		case esil:
+			pdu_condition_met = true;
+			break;
+#endif
+	case pdu_instruction:
+		// match full instruction
+		if (!strcmp (pdu_condition_instruction, opstr_nocolor)) {
+			pdu_condition_met = true;
+		}
+		break;
+	case pdu_opcode:
+		// opcode must be followed by space or end of string
+		if (!strncmp (pdu_condition_opcode, opstr_nocolor, opcode_len) && (opstr_nocolor[opcode_len] == ' ' || !opstr_nocolor[opcode_len])) {
+			pdu_condition_met = true;
+		}
+	}
+
+	return pdu_condition_met;
 }
 
 R_API int r_core_print_disasm_instructions_with_buf(RCore *core, ut64 address, ut8 *buf, int nb_bytes, int nb_opcodes) {
@@ -6968,7 +6955,7 @@ R_API int r_core_print_disasm_instructions(RCore *core, int nb_bytes, int nb_opc
 	return ret;
 }
 
-R_API int r_core_print_disasm_json(RCore *core, ut64 addr, ut8 *buf, int nb_bytes, int nb_opcodes, PJ *pj) {
+R_API int r_core_print_disasm_json (RCore *core, ut64 addr, ut8 *buf, int nb_bytes, int nb_opcodes, enum r_pdu_condition_t pdu_condition_type, const void *pdu_condition, PJ *pj) {
 	RDisasmState *ds;
 	RAnalFunction *f;
 	int i, j, k, ret, line;
@@ -6977,10 +6964,28 @@ R_API int r_core_print_disasm_json(RCore *core, ut64 addr, ut8 *buf, int nb_byte
 	int dis_opcodes = 0;
 	int limit_by = 'b';
 	char str[512];
+	char *opstr_nocolor = NULL;
+	bool pdu_condition_met = false;
+	bool close_pj = false;
+
+	if (pj == NULL)
+	{
+		pj = pj_new ();
+
+		if (!pj) {
+			return 1;
+		}
+		pj_a (pj);
+		close_pj = true;
+	}
 
 	if (nb_opcodes != 0) {
 		limit_by = 'o';
 	}
+	if (pdu_condition) {
+		limit_by = 'u';
+	}
+
 	if (nb_opcodes) { // Disassemble `nb_opcodes` opcodes.
 		if (nb_opcodes < 0) {
 			int count, nbytes = 0;
@@ -7053,6 +7058,7 @@ R_API int r_core_print_disasm_json(RCore *core, ut64 addr, ut8 *buf, int nb_byte
 	r_cons_break_push (NULL, NULL);
 	for (;;) {
 		if (r_cons_is_breaked ()) {
+			r_cons_printf ("Console is breaked.\n");
 			break;
 		}
 		RAnalOp asmop;
@@ -7070,31 +7076,43 @@ R_API int r_core_print_disasm_json(RCore *core, ut64 addr, ut8 *buf, int nb_byte
 			i = 0;
 		}
 
-		if (limit_by == 'o') {
-			if (j >= nb_opcodes) {
+		if (!pdu_condition)
+		{
+			if (limit_by == 'o') {
+				if (j >= nb_opcodes) {
+					r_cons_printf ("Hit max nb_opcodes.\n");
+					break;
+				}
+			} else if (i >= nb_bytes) {
+				r_cons_printf ("Hit max nb_bytes.\n");
 				break;
 			}
-		} else if (i >= nb_bytes) {
-			break;
 		}
+
 		ret = r_asm_disassemble (core->rasm, &asmop, buf + i, nb_bytes - i);
 		if (ret < 1) {
-			pj_o (pj);
-			pj_kn (pj, "offset", at);
-			pj_ki (pj, "size", 1);
-			if (asmop.bytes) {
-				char *hex = r_asm_op_get_hex (&asmop);
-				pj_ks (pj, "bytes", hex);
-				free (hex);
-			}
-			pj_ks (pj, "type", "invalid");
-			pj_end (pj);
-			i++;
-			k++;
-			j++;
 			result = true;
-			continue;
+			r_cons_printf ("Hit invalid instruction.\n");
+			break;
 		}
+
+		// {
+		// 	pj_o (pj);
+		// 	pj_kn (pj, "offset", at);
+		// 	pj_ki (pj, "size", 1);
+		// 	if (asmop.bytes) {
+		// 		char *hex = r_asm_op_get_hex (&asmop);
+		// 		pj_ks (pj, "bytes", hex);
+		// 		free (hex);
+		// 	}
+		// 	pj_ks (pj, "type", "invalid");
+		// 	pj_end (pj);
+		// 	i++;
+		// 	k++;
+		// 	j++;
+		// 	result = true;
+		// 	continue;
+		// }
 
 		char opstr[256];
 		r_str_ncpy (opstr, r_asm_op_get_asm (&asmop), sizeof (opstr) - 1);
@@ -7286,12 +7304,33 @@ R_API int r_core_print_disasm_json(RCore *core, ut64 addr, ut8 *buf, int nb_byte
 		j++; // instructions
 		line++;
 
-		end_nbopcodes = dis_opcodes == 1 && nb_opcodes > 0 && line>=nb_opcodes;
-		end_nbbytes = dis_opcodes == 0 && nb_bytes > 0 && i>=nb_bytes;
-		result = true;
-		r_anal_op_fini (&asmop);
-		if (end_nbopcodes || end_nbbytes) {
-			break;
+
+		if (pdu_condition) {
+			if (opstr) {
+				pdu_condition_met = check_pdu_condition (ds, opstr, pdu_condition_type, pdu_condition);
+			} else {
+				// no more bytes - give up
+				r_cons_reset ();
+				r_cons_printf ("Failed to find instruction meeting pdu condition.\n");
+				pdu_condition_met = true;
+			}
+
+			if (pdu_condition_met) {
+				r_anal_op_fini (&asmop);
+				result = true;
+				r_cons_printf ("PDU Condition Met.\n");
+				break;
+			}
+		}
+		else{
+			end_nbopcodes = dis_opcodes == 1 && nb_opcodes > 0 && line >= nb_opcodes;
+			end_nbbytes = dis_opcodes == 0 && nb_bytes > 0 && i >= nb_bytes;
+			result = true;
+			r_anal_op_fini (&asmop);
+			if (end_nbopcodes || end_nbbytes) {
+				r_cons_printf ("Hit max nb_bytes or nb_opcodes.\n");
+				break;
+			}
 		}
 	}
 	r_cons_break_pop ();
@@ -7302,6 +7341,14 @@ R_API int r_core_print_disasm_json(RCore *core, ut64 addr, ut8 *buf, int nb_byte
 		pj_end (pj);
 		result = true;
 	}
+
+	if (close_pj)
+	{
+		pj_end (pj);
+		r_cons_println (pj_string (pj));
+		pj_free (pj);
+	}
+
 	return result;
 }
 
@@ -7817,7 +7864,7 @@ R_API int r_core_disasm_pde(RCore *core, int nb_opcodes, int mode) {
 			if (block_instr) {
 				switch (mode) {
 				case R_MODE_JSON:
-					r_core_print_disasm_json (core, block_start, buf, block_sz, block_instr, pj);
+					r_core_print_disasm_json (core, block_start, buf, block_sz, block_instr, 0, NULL, pj);
 					break;
 				case R_MODE_SIMPLE:
 					r_core_disasm_pdi_with_buf (core, block_start, buf, -1, block_sz, 0);
@@ -7827,7 +7874,7 @@ R_API int r_core_disasm_pde(RCore *core, int nb_opcodes, int mode) {
 					break;
 				default:
 					// ok
-					r_core_print_disasm (core, block_start, buf, block_sz, block_instr, 0, NULL, false, false, NULL, NULL);
+					r_core_print_disasm (core, block_start, buf, block_sz, block_instr, 0, NULL, false, NULL);
 					break;
 				}
 			}

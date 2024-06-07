@@ -1332,8 +1332,13 @@ static int cmd_pdu(RCore *core, const char *input) {
 			r_core_cmd_help_match (core, help_msg_pdu, "pduc");
 			break;
 		}
-		ret = r_core_print_disasm (core, addr, buf, len, 0, pdu_opcode, "call", false,
-				input[1] == 'j', NULL, NULL);
+		if (input[1] == 'j')
+		{
+			ret = r_core_print_disasm_json (core, addr, buf, len, 0, pdu_opcode, "call", NULL);
+		}
+		else{
+			ret = r_core_print_disasm (core, addr, buf, len, 0, pdu_opcode, "call", false, NULL);
+		}
 		break;
 #if 0
 	case 'e': // "pdue"
@@ -1341,8 +1346,7 @@ static int cmd_pdu(RCore *core, const char *input) {
 			r_core_cmd_help_match (core, help_msg_pdu, "pdue");
 			break;
 		}
-		ret = r_core_print_disasm (core, addr, buf, len, 0, esil, arg, false,
-				input[1] == 'j', NULL, NULL);
+		ret = r_core_print_disasm (core, addr, buf, len, 0, esil, arg, false, NULL);
 		break;
 #endif
 	case 'i': // "pdui"
@@ -1350,24 +1354,36 @@ static int cmd_pdu(RCore *core, const char *input) {
 			r_core_cmd_help_match (core, help_msg_pdu, "pdui");
 			break;
 		}
-		ret = r_core_print_disasm (core, addr, buf, len, 0, pdu_instruction, arg, false,
-				input[1] == 'j', NULL, NULL);
+		if (input[1] == 'j')
+		{
+			ret = r_core_print_disasm_json (core, addr, buf, len, 0, pdu_instruction, arg, NULL);
+		} else {
+			ret = r_core_print_disasm (core, addr, buf, len, 0, pdu_instruction, arg, false, NULL);
+		}
 		break;
 	case 'o': // "pduo"
 		if (input[1] == '?' || (input[1] && input[2] == '?') || !arg) {
 			r_core_cmd_help_match (core, help_msg_pdu, "pduo");
 			break;
 		}
-		ret = r_core_print_disasm (core, addr, buf, len, 0, pdu_opcode, arg, false,
-				input[1] == 'j', NULL, NULL);
+		if (input[1] == 'j')
+		{
+			ret = r_core_print_disasm_json (core, addr, buf, len, 0, pdu_opcode, arg, NULL);
+		} else {
+			ret = r_core_print_disasm (core, addr, buf, len, 0, pdu_opcode, arg, false, NULL);
+		}
 		break;
 	case 's': // "pdus"
 		if (input[1] == '?' || (input[1] && input[2] == '?')) {
 			r_core_cmd_help_match (core, help_msg_pdu, "pdus");
 			break;
 		}
-		ret = r_core_print_disasm (core, addr, buf, len, 0, pdu_instruction, "syscall", false,
-				input[1] == 'j', NULL, NULL);
+		if (input[1] == 'j')
+		{
+			ret = r_core_print_disasm_json (core, addr, buf, len, 0, pdu_instruction, "syscall", NULL);
+		} else {
+			ret = r_core_print_disasm (core, addr, buf, len, 0, pdu_instruction, "syscall", false, NULL);
+		}
 		break;
 	case '?': // "pdu?"
 	default:
@@ -1384,35 +1400,19 @@ static void cmd_pDj(RCore *core, const char *arg) {
 	if (bsize < 0) {
 		bsize = -bsize;
 	}
-	PJ *pj = pj_new ();
-	if (!pj) {
-		return;
-	}
-	pj_a (pj);
 	ut8 *buf = malloc (bsize);
 	if (buf) {
 		r_io_read_at (core->io, core->offset, buf, bsize);
-		r_core_print_disasm_json (core, core->offset, buf, bsize, 0, pj);
+		r_core_print_disasm_json (core, core->offset, buf, bsize, 0, 0, NULL, NULL);
 		free (buf);
 	} else {
 		R_LOG_ERROR ("Cannot allocate %d byte(s)", bsize);
 	}
-	pj_end (pj);
-	r_cons_println (pj_string (pj));
-	pj_free (pj);
 }
 
 static void cmd_pdj(RCore *core, const char *arg, ut8* block) {
 	int nblines = r_num_math (core->num, arg);
-	PJ *pj = pj_new ();
-	if (!pj) {
-		return;
-	}
-	pj_a (pj);
-	r_core_print_disasm_json (core, core->offset, block, core->blocksize, nblines, pj);
-	pj_end (pj);
-	r_cons_println (pj_string (pj));
-	pj_free (pj);
+	r_core_print_disasm_json (core, core->offset, block, core->blocksize, nblines, 0, NULL, NULL);
 }
 
 static void cmd_p_minus_e(RCore *core, ut64 at, ut64 ate) {
@@ -5128,14 +5128,7 @@ static void disasm_recursive(RCore *core, ut64 addr, int count, char type_print)
 	RAnalOp aop = {0};
 	int ret;
 	ut8 buf[128];
-	PJ *pj = NULL;
-	if (type_print == 'j') {
-		pj = pj_new ();
-		if (!pj) {
-			return;
-		}
-		pj_a (pj);
-	}
+
 	while (count-- > 0) {
 		r_io_read_at (core->io, addr, buf, sizeof (buf));
 		r_anal_op_fini (&aop);
@@ -5146,7 +5139,7 @@ static void disasm_recursive(RCore *core, ut64 addr, int count, char type_print)
 		}
 	//	r_core_cmdf (core, "pD %d @ 0x%08"PFMT64x, aop.size, addr);
 		if (type_print == 'j') {
-			r_core_print_disasm_json (core, addr, buf, sizeof (buf), 1, pj);
+			r_core_print_disasm_json (core, addr, buf, sizeof (buf), 1, 0, NULL, NULL);
 		} else {
 			r_core_cmdf (core, "pd 1 @ 0x%08"PFMT64x, addr);
 		}
@@ -5163,11 +5156,6 @@ static void disasm_recursive(RCore *core, ut64 addr, int count, char type_print)
 			break;
 		}
 		addr += aop.size;
-	}
-	if (type_print == 'j') {
-		pj_end (pj);
-		r_cons_printf ("%s\n", pj_string (pj));
-		pj_free (pj);
 	}
 }
 
@@ -5208,7 +5196,7 @@ static void func_walk_blocks(RCore *core, RAnalFunction *f, char input, char typ
 			ut8 *buf = malloc (b->size);
 			if (buf) {
 				r_io_read_at (core->io, b->addr, buf, b->size);
-				r_core_print_disasm_json (core, b->addr, buf, b->size, 0, pj);
+				r_core_print_disasm_json (core, b->addr, buf, b->size, 0, 0, NULL, pj);
 				free (buf);
 			} else {
 				R_LOG_ERROR ("Cannot allocate %"PFMT64u" byte(s)", b->size);
@@ -6656,20 +6644,11 @@ static int cmd_print(void *data, const char *input) {
 						r_io_read_at (core->io, b->addr, block, b->size);
 
 						if (input[2] == 'j') {
-							pj = pj_new ();
-							if (!pj) {
-								break;
-							}
-							pj_a (pj);
-							r_core_print_disasm_json (core, b->addr, block, b->size, 0, pj);
-							pj_end (pj);
-							r_cons_printf ("%s\n", pj_string (pj));
-							pj_free (pj);
+							r_core_print_disasm_json (core, b->addr, block, b->size, 0, 0, NULL, NULL);
 						} else {
 							int dislen = r_core_print_disasm (
 								core, b->addr, block,
-								b->size, b->size, 0, NULL, true,
-								input[2] == 'J', NULL, NULL);
+								b->size, b->size, 0, NULL, true, NULL);
 							r_core_return_value (core, dislen);
 						}
 						free (block);
@@ -6739,7 +6718,7 @@ static int cmd_print(void *data, const char *input) {
 						ut8 *buf = malloc (b->size);
 						if (buf) {
 							r_io_read_at (core->io, b->addr, buf, b->size);
-							r_core_print_disasm_json (core, b->addr, buf, b->size, 0, pj);
+							r_core_print_disasm_json (core, b->addr, buf, b->size, 0, 0, NULL, pj);
 							free (buf);
 						} else {
 							R_LOG_ERROR ("Cannot allocate %"PFMT64u" byte(s)", b->size);
@@ -6762,7 +6741,7 @@ static int cmd_print(void *data, const char *input) {
 						ut8 *buf = calloc (sz, 1);
 						if (buf) {
 							(void)r_io_read_at (core->io, at, buf, sz);
-							int dislen = r_core_print_disasm (core, at, buf, sz, sz, 0, NULL, true, false, NULL, f);
+							int dislen = r_core_print_disasm (core, at, buf, sz, sz, 0, NULL, true, f);
 							r_core_return_value (core, dislen);
 							free (buf);
 							// r_core_cmdf (core, "pD %d @ 0x%08" PFMT64x, f->_size > 0 ? f->_size: r_anal_function_realsize (f), f->addr);
@@ -6865,6 +6844,7 @@ static int cmd_print(void *data, const char *input) {
 			ut64 addr = core->offset;
 			ut8 *block1 = NULL;
 			ut64 start;
+			int dislen;
 
 			if (bw_disassemble) {
 				int bs1 = (core->blocksize * 2) + 64;
@@ -6879,7 +6859,11 @@ static int cmd_print(void *data, const char *input) {
 							break;
 						}
 						r_io_read_at (core->io, addr - l, block1, bs1);
-						int dislen = r_core_print_disasm (core, addr - l, block1, l, l, 0, NULL, true, formatted_json, NULL, NULL);
+						if (formatted_json) {
+							dislen = r_core_print_disasm_json (core, addr - l, block1, l, l, 0, NULL, NULL);
+						} else {
+							dislen = r_core_print_disasm (core, addr - l, block1, l, l, 0, NULL, true, NULL);
+						}
 						r_core_return_value (core, dislen);
 					} else { // pd
 						if (!r_core_prevop_addr (core, core->offset, l, &start)) {
@@ -6904,11 +6888,15 @@ static int cmd_print(void *data, const char *input) {
 						}
 						r_io_read_at (core->io, prevaddr - instr_len, block1, bs1);
 						r_core_seek (core, prevaddr - instr_len, true);
-						int dislen = r_core_print_disasm (core,
-								core->offset, block1,
-								R_MAX (bs, bs1), l, 0, NULL,
-								false, formatted_json, NULL,
-								NULL);
+
+						if (formatted_json) {
+							dislen = r_core_print_disasm_json (core, core->offset, block1, R_MAX(bs, bs1), l, 0, NULL, NULL);
+						} else {
+							dislen = r_core_print_disasm (core,
+									core->offset, block1,
+									R_MAX (bs, bs1), l, 0, NULL,
+									false, NULL);
+						}
 						r_core_return_value (core, dislen);
 						r_core_seek (core, prevaddr, true);
 					}
@@ -6924,10 +6912,13 @@ static int cmd_print(void *data, const char *input) {
 					block1 = malloc (addrbytes * l);
 					if (block1) {
 						r_io_read_at (core->io, addr, block1, addrbytes * l);
-						int dislen = r_core_print_disasm (core,
-								addr, block1, addrbytes * l, l,
-								0, NULL, true, formatted_json,
-								NULL, NULL);
+						if (formatted_json) {
+							dislen = r_core_print_disasm_json (core, addr, 
+								block1, addrbytes * l, l, 0, NULL, NULL);
+						} else {
+							dislen = r_core_print_disasm (core, addr, block1, 
+								addrbytes * l, l, 0, NULL, false, NULL);
+						}
 						r_core_return_value (core, dislen);
 					} else {
 						R_LOG_ERROR ("Cannot allocate %" PFMT64d " byte(s)", addrbytes * l);
@@ -6942,9 +6933,13 @@ static int cmd_print(void *data, const char *input) {
 								l /= 4;
 							}
 						}
-						core->num->value = r_core_print_disasm (core,
-								addr, buf, buf_size, l,	0, NULL,
-								false, formatted_json, NULL, NULL);
+						if (formatted_json) {
+							core->num->value = r_core_print_disasm_json (core, 
+								addr, buf, buf_size, l, 0, NULL, NULL);
+						} else {
+							core->num->value = r_core_print_disasm (core, 
+								addr, buf, buf_size, l, 0, NULL, false, NULL);
+						}
 					}
 				}
 			}

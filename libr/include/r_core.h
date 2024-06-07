@@ -729,58 +729,60 @@ enum r_pdu_condition_t {
 	pdu_instruction,
 	pdu_opcode
 };
-R_API int r_core_print_disasm(RCore *core, ut64 addr, ut8 *buf, int len, int count, enum r_pdu_condition_t pdu_condition_type, const void *pdu_condition, bool count_bytes, bool json, PJ *pj, RAnalFunction *pdf);
-R_API int r_core_print_disasm_json(RCore *core, ut64 addr, ut8 *buf, int len, int lines, PJ *pj);
-R_API int r_core_print_disasm_instructions_with_buf(RCore *core, ut64 address, ut8 *buf, int nb_bytes, int nb_opcodes);
-R_API int r_core_print_disasm_instructions(RCore *core, int nb_bytes, int nb_opcodes);
-R_API int r_core_print_disasm_all(RCore *core, ut64 addr, int l, int len, int mode);
 
-R_API int r_core_disasm_pdi_with_buf(RCore *core, ut64 address, ut8 *buf, ut32 nb_opcodes, ut32 nb_bytes, int fmt);
-R_API int r_core_disasm_pdi(RCore *core, int nb_opcodes, int nb_bytes, int fmt);
-R_API int r_core_disasm_pde(RCore *core, int nb_opcodes, int mode);
-R_API int r_core_print_fcn_disasm(RPrint *p, RCore *core, ut64 addr, int l, int invbreak, int cbytes);
-R_API int r_core_get_prc_cols(RCore *core);
-R_API int r_core_flag_in_middle(RCore *core, ut64 at, int oplen, int *midflags);
-R_API int r_core_bb_starts_in_middle(RCore *core, ut64 at, int oplen);
+R_API int r_core_print_disasm (RCore * core, ut64 addr, ut8 * buf, int len, int count, enum r_pdu_condition_t pdu_condition_type, const void *pdu_condition, bool count_bytes, RAnalFunction *pdf);
+R_API int r_core_print_disasm_json (RCore * core, ut64 addr, ut8 * buf, int nb_bytes, int nb_opcodes, enum r_pdu_condition_t pdu_condition_type, const void *pdu_condition, PJ *pj);
+
+R_API int r_core_print_disasm_instructions_with_buf (RCore * core, ut64 address, ut8 * buf, int nb_bytes, int nb_opcodes);
+R_API int r_core_print_disasm_instructions (RCore * core, int nb_bytes, int nb_opcodes);
+R_API int r_core_print_disasm_all (RCore * core, ut64 addr, int l, int len, int mode);
+
+R_API int r_core_disasm_pdi_with_buf (RCore * core, ut64 address, ut8 * buf, ut32 nb_opcodes, ut32 nb_bytes, int fmt);
+R_API int r_core_disasm_pdi (RCore * core, int nb_opcodes, int nb_bytes, int fmt);
+R_API int r_core_disasm_pde (RCore * core, int nb_opcodes, int mode);
+R_API int r_core_print_fcn_disasm (RPrint * p, RCore * core, ut64 addr, int l, int invbreak, int cbytes);
+R_API int r_core_get_prc_cols (RCore * core);
+R_API int r_core_flag_in_middle (RCore * core, ut64 at, int oplen, int *midflags);
+R_API int r_core_bb_starts_in_middle (RCore * core, ut64 at, int oplen);
 
 // both do the same, we should get rid of one of them
-R_API bool r_core_bin_raise(RCore *core, ut32 bfid);
-R_API bool r_core_bin_set_cur(RCore *core, RBinFile *binfile);
+R_API bool r_core_bin_raise (RCore * core, ut32 bfid);
+R_API bool r_core_bin_set_cur (RCore * core, RBinFile * binfile);
 
-R_API bool r_core_bin_set_env(RCore *r, RBinFile *binfile);
-R_API bool r_core_bin_set_by_fd(RCore *core, ut64 bin_fd);
-R_API bool r_core_bin_set_by_name(RCore *core, const char *name);
-R_API bool r_core_bin_load(RCore *core, const char *file, ut64 baseaddr);
-R_API bool r_core_bin_rebase(RCore *core, ut64 baddr);
-R_API void r_core_bin_export_info(RCore *core, int mode);
-R_API bool r_core_bin_list(RCore *core, int mode);
-R_API bool r_core_bin_delete(RCore *core, ut32 binfile_idx);
-R_API ut64 r_core_bin_impaddr(RBin *bin, int va, const char *name);
+R_API bool r_core_bin_set_env (RCore * r, RBinFile * binfile);
+R_API bool r_core_bin_set_by_fd (RCore * core, ut64 bin_fd);
+R_API bool r_core_bin_set_by_name (RCore * core, const char *name);
+R_API bool r_core_bin_load (RCore * core, const char *file, ut64 baseaddr);
+R_API bool r_core_bin_rebase (RCore * core, ut64 baddr);
+R_API void r_core_bin_export_info (RCore * core, int mode);
+R_API bool r_core_bin_list (RCore * core, int mode);
+R_API bool r_core_bin_delete (RCore * core, ut32 binfile_idx);
+R_API ut64 r_core_bin_impaddr (RBin * bin, int va, const char *name);
 
 // XXX - this is kinda hacky, maybe there should be a way to
 // refresh the bin environment without specific calls?
-R_API int r_core_pseudo_code(RCore *core, const char *input);
+R_API int r_core_pseudo_code (RCore * core, const char *input);
 
 /* gdiff.c */
-R_API int r_core_zdiff(RCore *c, RCore *c2);
-R_API bool r_core_gdiff(RCore *core1, RCore *core2);
-R_API int r_core_gdiff_fcn(RCore *c, ut64 addr, ut64 addr2);
+R_API int r_core_zdiff (RCore * c, RCore * c2);
+R_API bool r_core_gdiff (RCore * core1, RCore * core2);
+R_API int r_core_gdiff_fcn (RCore * c, ut64 addr, ut64 addr2);
 
 /* project */
-R_API void r_core_project_execute_cmds(RCore *core, const char *prjfile);
-R_API bool r_core_project_open(RCore *core, const char *file);
-R_API void r_core_project_cat(RCore *core, const char *name);
-R_API int r_core_project_delete(RCore *core, const char *prjfile);
-R_API int r_core_project_list(RCore *core, int mode);
-R_API bool r_core_project_save_script(RCore *core, const char *file, int opts);
-R_API bool r_core_project_save(RCore *core, const char *file);
-R_API char *r_core_project_name(RCore *core, const char *file);
-R_API char *r_core_project_notes_file(RCore *core, const char *file);
-R_API void r_core_project_undirty(RCore *core);
-R_API char *r_core_sysenv_begin(RCore *core, const char *cmd);
-R_API void r_core_sysenv_end(RCore *core, const char *cmd);
+R_API void r_core_project_execute_cmds (RCore * core, const char *prjfile);
+R_API bool r_core_project_open (RCore * core, const char *file);
+R_API void r_core_project_cat (RCore * core, const char *name);
+R_API int r_core_project_delete (RCore * core, const char *prjfile);
+R_API int r_core_project_list (RCore * core, int mode);
+R_API bool r_core_project_save_script (RCore * core, const char *file, int opts);
+R_API bool r_core_project_save (RCore * core, const char *file);
+R_API char *r_core_project_name (RCore * core, const char *file);
+R_API char *r_core_project_notes_file (RCore * core, const char *file);
+R_API void r_core_project_undirty (RCore * core);
+R_API char *r_core_sysenv_begin (RCore * core, const char *cmd);
+R_API void r_core_sysenv_end (RCore * core, const char *cmd);
 
-R_API void r_core_recover_vars(RCore *core, RAnalFunction *fcn, bool argonly);
+R_API void r_core_recover_vars (RCore * core, RAnalFunction * fcn, bool argonly);
 // XXX dupe from r_bin.h
 /* bin.c */
 #define R_CORE_BIN_ACC_STRINGS	0x001
